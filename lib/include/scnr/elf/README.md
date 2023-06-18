@@ -1,0 +1,1 @@
+from glibc https://sourceware.org/git/?p=glibc.git;a=blob_plain;f=elf/elf.h;hb=HEAD

@@ -1,0 +1,1 @@
+There is only ascii chars. 1234567890-=!@#$%^&*()_+/']}"?\|

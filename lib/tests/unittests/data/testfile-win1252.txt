@@ -1,0 +1,1 @@
+TestFile, Zürich, price is £100, € euro
