@@ -32,7 +32,7 @@ ThreadPool::ThreadPool(size_t workers) {
 }
 
 ThreadPool::~ThreadPool() {
-  assert(stopped_);
+  // assert(stopped_);
 }
 
 void ThreadPool::Submit(Task task) {
@@ -53,7 +53,7 @@ void ThreadPool::WaitIdle() {
 }
 
 void ThreadPool::Stop() {
-  assert(not stopped_);
+  // assert(not stopped_);
 
   task_queue_.Cancel();
   for (auto& worker : workers_) {

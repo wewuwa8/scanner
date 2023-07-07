@@ -120,7 +120,7 @@ std::optional<TxtFile> try_txt(const Byte* buf, size_t nbytes) {
   } else if (looks_utf32(buf, nbytes, true)) {
     txtfile.encoding = "UTF-32-BE";
   } else if (looks_utf32(buf, nbytes, false)) {
-    txtfile.encoding = "UTF-8-LE";
+    txtfile.encoding = "UTF-32-LE";
   } else {
     return {};
   }
