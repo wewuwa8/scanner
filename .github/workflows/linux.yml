@@ -1,0 +1,92 @@
+name: Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  main:
+    runs-on: 'ubuntu-${{ matrix.os }}'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ 20.04 ]
+        compiler: [ gcc-11 ]
+        # compiler: [ gcc-11, clang-14 ]
+        isPR:
+          - ${{ github.event_name == 'pull_request' }}
+
+    env:
+      BUILD_TYPE: 'Debug'
+      # BUILD_TYPE: 'Debug RelWithDebInfo'
+      DEBIAN_FRONTEND: 'noninteractive'
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Print ByteOrder
+        run: |
+          lscpu | grep -i endian
+
+      - name: Update dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake googletest
+
+      - name: Install dependencies gcc
+        if: startsWith(matrix.compiler, 'gcc')
+        run: |
+          compiler=${{ matrix.compiler }}
+          version=${compiler:4}
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get install -y gcc-$version g++-$version libstdc++-$version-dev
+          sudo update-alternatives                                                                                     \
+            --install /usr/bin/gcc        gcc        /usr/bin/gcc-$version        200                                  \
+            --slave   /usr/bin/g++        g++        /usr/bin/g++-$version                                             \
+            --slave   /usr/bin/gcc-ar     gcc-ar     /usr/bin/gcc-ar-$version                                          \
+            --slave   /usr/bin/gcc-nm     gcc-nm     /usr/bin/gcc-nm-$version                                          \
+            --slave   /usr/bin/gcc-ranlib gcc-ranlib /usr/bin/gcc-ranlib-$version                                      \
+            --slave   /usr/bin/gcov       gcov       /usr/bin/gcov-$version                                            \
+            --slave   /usr/bin/gcov-tool  gcov-tool  /usr/bin/gcov-tool-$version                                       \
+            --slave   /usr/bin/gcov-dump  gcov-dump  /usr/bin/gcov-dump-$version
+          sudo update-alternatives --auto gcc
+
+          sudo update-alternatives                                                                                     \
+            --install /usr/bin/cpp        cpp        /usr/bin/cpp-$version        200
+          sudo update-alternatives --auto cpp
+
+      - name: Configure CMake
+        run: |
+          compiler=${{ matrix.compiler }}
+          if [[ "$compiler" == gcc* ]]; then
+            version=${compiler:4}
+            compiler="g++"
+            standard=20;
+          else
+            version=${compiler:6}
+            compiler="clang++-$version"
+          fi
+
+          for build_type in ${BUILD_TYPE[*]}; do
+            dir="build_${compiler}_${build_type}"
+            echo $dir
+
+            cmake -S . -B $dir                                                                                         \
+              -DCMAKE_BUILD_TYPE="$build_type"
+          done
+
+      - name: Build
+        run: |
+          for dir in build*/; do
+            make -C $dir
+          done
+
+      - name: Test
+        run: |
+          for dir in build*/; do
+            cd $dir
+            ctest --output-on-failure -V
+            cd ..
+          done

@@ -1,0 +1,72 @@
+name: QEMU to run s390x-focal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  
+jobs:
+  one:
+    runs-on: ubuntu-latest
+    container:
+        image: multiarch/ubuntu-core:s390x-focal
+        env:
+            BUILD_TYPE: 'Debug'
+            DEBIAN_FRONTEND: 'noninteractive'
+            TZ: 'Europe/Berlin'
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Print ByteOrder
+      run: |
+        lscpu | grep -i endian
+
+    - name: Update dependencies
+      run: |
+        apt-get update
+        apt-get install -y software-properties-common cmake googletest
+
+    - name: Install dependencies gcc
+      run: |
+        compiler=g++
+        version=11
+        add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        apt-get install -y gcc-$version g++-$version libstdc++-$version-dev
+        update-alternatives                                                                           \
+        --install /usr/bin/gcc        gcc        /usr/bin/gcc-$version        200                     \
+        --slave   /usr/bin/g++        g++        /usr/bin/g++-$version                                \
+        --slave   /usr/bin/gcc-ar     gcc-ar     /usr/bin/gcc-ar-$version                             \
+        --slave   /usr/bin/gcc-nm     gcc-nm     /usr/bin/gcc-nm-$version                             \
+        --slave   /usr/bin/gcc-ranlib gcc-ranlib /usr/bin/gcc-ranlib-$version                         \
+        --slave   /usr/bin/gcov       gcov       /usr/bin/gcov-$version                               \
+        --slave   /usr/bin/gcov-tool  gcov-tool  /usr/bin/gcov-tool-$version                          \
+        --slave   /usr/bin/gcov-dump  gcov-dump  /usr/bin/gcov-dump-$version
+        update-alternatives --auto gcc
+
+        update-alternatives                                                                           \
+        --install /usr/bin/cpp        cpp        /usr/bin/cpp-$version        200
+        update-alternatives --auto cpp
+
+
+    - name: Configure CMake
+      run: |
+        dir="build_g++_Debug"
+        cmake -S . -B $dir                                                                            \
+            -DCMAKE_BUILD_TYPE="Debug"                                                                \
+            -DCMAKE_CXX_COMPILER="g++"
+
+    - name: Build
+      run: |
+        for dir in build*/; do
+          make -C $dir
+        done
+
+    - name: Test
+      run: |
+        for dir in build*/; do
+          cd $dir
+          ctest --output-on-failure -V
+          cd ..
+        done
