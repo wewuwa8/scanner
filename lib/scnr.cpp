@@ -83,7 +83,7 @@ std::vector<std::pair<int, FileInfo>> FileInfoCollector::Summarize() const {
   for (const auto& [k, v] : mp) {
     retval.push_back({v, k});
   }
-  lock.release();
+  lock.unlock();
   std::sort(retval.begin(), retval.end(), [](const auto& lhs, const auto& rhs) {
     return lhs.first > rhs.first;
   });
