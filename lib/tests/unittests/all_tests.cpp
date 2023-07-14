@@ -9,8 +9,8 @@
 #include <gtest/gtest.h>
 
 TEST(Encoding, Ascii) {
-  auto buffer = scnr::read_file(std::filesystem::path{"ascii.txt"});
-  auto fileinfo = scnr::detect_content(buffer.data(), buffer.size());
+  auto file = scnr::read_file(std::filesystem::path{"ascii.txt"});
+  auto fileinfo = scnr::detect_content(file);
   EXPECT_TRUE(std::holds_alternative<scnr::TxtFile>(fileinfo));
   EXPECT_EQ(std::get<scnr::TxtFile>(fileinfo).encoding, "ASCII");
 }
@@ -24,8 +24,8 @@ TEST(Encoding, All) {
     } else {
       std::cout << "trying path = " << dir_entry.path() << std::endl;
     }
-    auto buffer = scnr::read_file(dir_entry.path());
-    auto fileinfo = scnr::detect_content(buffer.data(), buffer.size());
+    auto file = scnr::read_file(dir_entry.path());
+    auto fileinfo = scnr::detect_content(file);
     std::cout << "path = " << dir_entry.path() << ", " << fileinfo << '\n';
   }
 }

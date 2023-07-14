@@ -22,7 +22,7 @@ namespace {
 
 void process_file_impl(const std::filesystem::path& path, scnr::FileInfoCollector& collector) {
   auto file = scnr::read_file(path);
-  auto fileinfo = scnr::detect_content(file.data(), file.size());
+  auto fileinfo = scnr::detect_content(file);
   collector.Add(std::move(fileinfo));
 }
 
@@ -56,13 +56,13 @@ void process_impl(const std::filesystem::path& path, scnr::FileInfoCollector& co
 
 namespace scnr {
 
-FileInfo detect_content(const Byte* buf, size_t nbytes) {
+FileInfo detect_content(scnr::StreamData stream) {
   FileInfo fileinfo;
-  if (auto elf = try_elf(buf, nbytes)) {
+  if (auto elf = try_elf(stream)) {
     fileinfo = std::move(elf.value());
-  } else if (auto macho = try_macho(buf, nbytes)) {
+  } else if (auto macho = try_macho(stream)) {
     fileinfo = std::move(macho.value());
-  } else if (auto txt = try_txt(buf, nbytes)) {
+  } else if (auto txt = try_txt(stream)) {
     fileinfo = std::move(txt.value());
   }
   return fileinfo;

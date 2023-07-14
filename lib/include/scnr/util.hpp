@@ -1,5 +1,6 @@
 #pragma once
 
+#include <scnr/file.hpp>
 #include <scnr/types.hpp>
 
 #include <algorithm>
@@ -8,8 +9,8 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -42,14 +43,8 @@ void MyLogImpl(const T& head, const TA&... tail) {
 
 #define MyAssert(...) MyAssertImpl(#__VA_ARGS__, __VA_ARGS__)
 
-inline std::vector<Byte> read_file(const std::filesystem::path& path) {
-  std::fstream t(path, std::ios::in | std::ios::binary);
-  t.seekg(0, std::ios::end);
-  size_t size = t.tellg();
-  std::vector<Byte> buffer(size);
-  t.seekg(0);
-  t.read(reinterpret_cast<char*>(buffer.data()), size);
-  return buffer;
+inline scnr::File read_file(const std::filesystem::path& path) {
+  return scnr::File(path);
 }
 
 template <typename T>
@@ -91,13 +86,6 @@ T AnyToHost(T x, bool bigendian = true) {
     return BEToHost(x);
   }
   return LEToHost(x);
-}
-
-template <typename T>
-T ReadAs(const Byte* buf) {
-  T retval;
-  std::memcpy(&retval, buf, sizeof(T));
-  return retval;
 }
 
 inline std::endian GetEndian(bool opposite = false) {

@@ -1,3 +1,4 @@
+#include <scnr/file.hpp>
 #include <scnr/parse_mach-o.hpp>
 #include <scnr/util.hpp>
 
@@ -40,12 +41,11 @@ std::string_view CpuTypeAsSV(cpu_type_t cputype) {
   return retval;
 }
 
-std::optional<scnr::MachOSingle> parse_single(const scnr::Byte* buf, size_t nbytes) {
-  if (nbytes < sizeof(uint32_t)) {
+std::optional<scnr::MachOSingle> parse_single(scnr::StreamData stream) {
+  uint32_t magic;
+  if (!stream.readAs(0, magic)) {
     return {};
   }
-
-  const uint32_t magic = scnr::ReadAs<uint32_t>(buf);
   mach_header header32;
   mach_header_64 header64;
 
@@ -60,11 +60,10 @@ std::optional<scnr::MachOSingle> parse_single(const scnr::Byte* buf, size_t nbyt
       diff_endian = true;
       [[fallthrough]];
     case MH_MAGIC:
-      if (nbytes < sizeof(mach_header)) {
+      if (!stream.readAs(read_bytes, header32)) {
         return {};
       }
       w64 = false;
-      header32 = scnr::ReadAs<mach_header>(buf);
 
       break;
     case MH_CIGAM_64:
@@ -72,11 +71,10 @@ std::optional<scnr::MachOSingle> parse_single(const scnr::Byte* buf, size_t nbyt
       [[fallthrough]];
 
     case MH_MAGIC_64:
-      if (nbytes < sizeof(mach_header_64)) {
+      if (!stream.readAs(read_bytes, header64)) {
         return {};
       }
       w64 = true;
-      header64 = scnr::ReadAs<mach_header_64>(buf);
       break;
 
     default:
@@ -99,20 +97,18 @@ std::optional<scnr::MachOSingle> parse_single(const scnr::Byte* buf, size_t nbyt
   }
 
   for (uint32_t i = 0; i < ncmds; ++i) {
-    if (nbytes < read_bytes + sizeof(load_command)) {
+    load_command lc;
+    if (!stream.readAs(read_bytes, lc)) {
       return {};
     }
-
-    load_command lc = scnr::ReadAs<load_command>(buf + read_bytes);
     auto lc_cmd = diff_endian ? scnr::rev_bytes(lc.cmd) : lc.cmd;
     auto lc_cmdsize = diff_endian ? scnr::rev_bytes(lc.cmdsize) : lc.cmdsize;
 
     if (lc_cmd == LC_CODE_SIGNATURE) {
-      if (nbytes < read_bytes + sizeof(linkedit_data_command)) {
+      linkedit_data_command le_data_cmd_sign;
+      if (!stream.readAs(read_bytes, le_data_cmd_sign)) {
         return {};
       }
-
-      linkedit_data_command le_data_cmd_sign = scnr::ReadAs<linkedit_data_command>(buf + read_bytes);
       auto dataoff = diff_endian ? scnr::rev_bytes(le_data_cmd_sign.dataoff) : le_data_cmd_sign.dataoff;
       auto datasize = diff_endian ? scnr::rev_bytes(le_data_cmd_sign.datasize) : le_data_cmd_sign.datasize;
       retval.issigned = true;
@@ -124,12 +120,12 @@ std::optional<scnr::MachOSingle> parse_single(const scnr::Byte* buf, size_t nbyt
   return retval;
 }
 
-std::optional<scnr::MachOFat> parse_fat(const scnr::Byte* buf, size_t nbytes) {
-  if (nbytes < sizeof(fat_header)) {
+std::optional<scnr::MachOFat> parse_fat(scnr::StreamData stream) {
+  size_t read_bytes = 0;
+  fat_header header;
+  if (!stream.readAs(read_bytes, header)) {
     return {};
   }
-  size_t read_bytes = 0;
-  const fat_header header = scnr::ReadAs<fat_header>(buf);
   bool diff_endian = false;
 
   switch (header.magic) {
@@ -150,13 +146,13 @@ std::optional<scnr::MachOFat> parse_fat(const scnr::Byte* buf, size_t nbytes) {
     return {};
   }
   for (int i = 0; i < nfat_arch; ++i) {
-    if (nbytes < read_bytes + sizeof(fat_arch)) {
+    fat_arch arch;
+    if (!stream.readAs(read_bytes, arch)) {
       return {};
     }
-    auto arch = scnr::ReadAs<fat_arch>(buf + read_bytes);
     auto offset = diff_endian ? scnr::rev_bytes(arch.offset) : arch.offset;
     auto size = diff_endian ? scnr::rev_bytes(arch.size) : arch.size;
-    auto macho = parse_single(buf + offset, size);
+    auto macho = parse_single(stream.advanced(offset));
     if (!macho) {
       return {};
     }
@@ -171,12 +167,12 @@ std::optional<scnr::MachOFat> parse_fat(const scnr::Byte* buf, size_t nbytes) {
 
 namespace scnr {
 
-std::optional<MachOFile> try_macho(const Byte* buf, size_t nbytes) {
-  auto fat = parse_fat(buf, nbytes);
+std::optional<MachOFile> try_macho(scnr::StreamData stream) {
+  auto fat = parse_fat(stream);
   if (fat) {
     return MachOFile{fat.value()};
   }
-  auto single = parse_single(buf, nbytes);
+  auto single = parse_single(stream);
   if (single) {
     return MachOFile{single.value()};
   }
