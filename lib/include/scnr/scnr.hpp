@@ -24,7 +24,7 @@ class FileInfoCollector {
   std::unordered_map<FileInfo, int> mp;
 };
 
-FileInfo detect_content(const Byte* buf, size_t nbytes);
+FileInfo detect_content(scnr::StreamData stream);
 void process(const std::filesystem::path& path, FileInfoCollector& collector);
 
 }  // namespace scnr

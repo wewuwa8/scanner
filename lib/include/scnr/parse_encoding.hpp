@@ -22,7 +22,7 @@ struct TxtFile {
   }
 };
 
-std::optional<TxtFile> try_txt(const Byte* buf, size_t nbytes);
+std::optional<TxtFile> try_txt(scnr::StreamData stream);
 
 }  // namespace scnr
 

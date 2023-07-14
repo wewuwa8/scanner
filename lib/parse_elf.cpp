@@ -1,3 +1,4 @@
+#include <scnr/file.hpp>
 #include <scnr/parse_elf.hpp>
 #include <scnr/types.hpp>
 #include <scnr/util.hpp>
@@ -219,25 +220,18 @@ struct Elf64Traits {
 };
 
 template <typename ElfTraits>
-std::optional<scnr::ElfFile> try_elf_impl(const scnr::Byte* buf, size_t nbytes) {
-  auto ReadSafe = [buf, nbytes](size_t offset, auto& result) -> bool {
-    if (nbytes < offset + sizeof(result)) {
-      return false;
-    }
-    result = scnr::ReadAs<std::remove_reference_t<decltype(result)>>(buf + offset);
-    return true;
-  };
-  size_t read_bytes = 0;
-
-  if (nbytes < EI_NIDENT || buf[EI_MAG0] != ELFMAG0 || buf[EI_MAG1] != ELFMAG1 || buf[EI_MAG2] != ELFMAG2 ||
-      buf[EI_MAG3] != ELFMAG3) {
+std::optional<scnr::ElfFile> try_elf_impl(scnr::StreamData stream) {
+  scnr::Byte buf[EI_NIDENT + 1];
+  if (!stream.read(buf, 0, EI_NIDENT + 1) || buf[EI_MAG0] != ELFMAG0 || buf[EI_MAG1] != ELFMAG1 ||
+      buf[EI_MAG2] != ELFMAG2 || buf[EI_MAG3] != ELFMAG3) {
     return {};
   }
+  size_t read_bytes = 0;
 
   scnr::ElfFile elffile;
   elffile.w64 = ElfTraits::w64;
   typename ElfTraits::Elf_Ehdr elf_hdr;
-  if (!ReadSafe(read_bytes, elf_hdr)) {
+  if (!stream.readAs(read_bytes, elf_hdr)) {
     return {};
   }
 
@@ -262,18 +256,25 @@ std::optional<scnr::ElfFile> try_elf_impl(const scnr::Byte* buf, size_t nbytes) 
   typename ElfTraits::Elf_Phdr prg_hdr;
 
   for (int i = 0; i < phnum; ++i) {
-    if (!ReadSafe(phoff + i * phentsize, prg_hdr)) {
+    if (!stream.readAs(phoff + i * phentsize, prg_hdr)) {
       return {};
     }
+
     auto type = scnr::rev_bytes(prg_hdr.p_type, diff_endian);
     if (type == PT_INTERP) {
       auto sz = scnr::rev_bytes(prg_hdr.p_filesz, diff_endian);
       auto offset = scnr::rev_bytes(prg_hdr.p_offset, diff_endian);
-      if (sz > 4098 || (nbytes < offset + sz)) {
+
+      if (sz > 4098) {
         // sanity check
         return {};
       }
-      elffile.interpreter = std::string(reinterpret_cast<const char*>(buf) + offset, sz);
+
+      std::string interpreter(sz, '\0');
+      if (!stream.read(interpreter.data(), offset, sz)) {
+        return {};
+      }
+      elffile.interpreter = std::move(interpreter);
       scnr::trim_right(elffile.interpreter);
     }
   }
@@ -283,12 +284,16 @@ std::optional<scnr::ElfFile> try_elf_impl(const scnr::Byte* buf, size_t nbytes) 
 }  // namespace
 
 namespace scnr {
-std::optional<ElfFile> try_elf(const Byte* buf, size_t nbytes) {
-  if (EI_CLASS < nbytes && buf[EI_CLASS] == ELFCLASS32) {
-    return try_elf_impl<Elf32Traits>(buf, nbytes);
+std::optional<ElfFile> try_elf(scnr::StreamData stream) {
+  Byte buf[EI_CLASS + 1];
+  if (not stream.read(buf, 0, EI_CLASS + 1)) {
+    return {};
   }
-  if (EI_CLASS < nbytes && buf[EI_CLASS] == ELFCLASS64) {
-    return try_elf_impl<Elf64Traits>(buf, nbytes);
+  if (buf[EI_CLASS] == ELFCLASS32) {
+    return try_elf_impl<Elf32Traits>(stream);
+  }
+  if (buf[EI_CLASS] == ELFCLASS64) {
+    return try_elf_impl<Elf64Traits>(stream);
   }
   return {};
 }

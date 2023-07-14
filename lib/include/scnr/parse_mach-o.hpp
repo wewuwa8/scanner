@@ -1,5 +1,6 @@
 #pragma once
 
+#include <scnr/file.hpp>
 #include <scnr/types.hpp>
 #include <scnr/util.hpp>
 
@@ -68,7 +69,7 @@ struct MachOFile {
   }
 };
 
-std::optional<MachOFile> try_macho(const Byte* buf, size_t nbytes);
+std::optional<MachOFile> try_macho(scnr::StreamData stream);
 
 }  // namespace scnr
 

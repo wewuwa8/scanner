@@ -26,7 +26,7 @@ struct ElfFile {
   }
 };
 
-std::optional<ElfFile> try_elf(const Byte* buf, size_t nbytes);
+std::optional<ElfFile> try_elf(scnr::StreamData stream);
 
 }  // namespace scnr
 
