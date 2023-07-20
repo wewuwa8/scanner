@@ -6,6 +6,7 @@ add_library(scnr STATIC
     parse_mach-o.cpp
     parse_elf.cpp
     parse_encoding.cpp
+    context.cpp
 )
 target_link_libraries(scnr PUBLIC Threads::Threads)
 target_include_directories(scnr PUBLIC include)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <scnr/blocking_queue.hpp>
+#include <scnr/context.hpp>
 
 #include <atomic>
 #include <functional>
@@ -14,7 +15,7 @@ using Task = std::function<void()>;
 // Fixed-size pool of worker threads
 class ThreadPool {
  public:
-  explicit ThreadPool(size_t workers);
+  explicit ThreadPool(size_t workers, const Context* ctx = nullptr);
   ~ThreadPool();
 
   ThreadPool(const ThreadPool&) = delete;
@@ -34,9 +35,11 @@ class ThreadPool {
   static ThreadPool* Current();
 
  private:
-  void TaskDone();
+  void TaskDone(int tasks = 1);
+  void CancelTasks();
 
  private:
+  const scnr::Context* ctx_ = nullptr;
   bool stopped_ = false;
   std::vector<std::thread> workers_;
   UnboundedBlockingQueue<Task> task_queue_;

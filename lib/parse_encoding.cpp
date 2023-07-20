@@ -109,6 +109,10 @@ bool looks_utf32_with_BOM(scnr::StreamData stream, bool bigendian) {
   return false;
 }
 
+bool looks_xml(scnr::StreamData stream) {
+  return false;
+}
+
 }  // namespace
 
 namespace scnr {
@@ -132,6 +136,8 @@ std::optional<TxtFile> try_txt(scnr::StreamData stream) {
     txtfile.encoding = "UTF-32-BE";
   } else if (looks_utf32(stream, false)) {
     txtfile.encoding = "UTF-32-LE";
+  } else if (looks_xml(stream)) {
+    return {};
   } else {
     return {};
   }

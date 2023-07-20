@@ -85,6 +85,10 @@ std::vector<std::pair<int, FileInfo>> FileInfoCollector::Summarize() const {
   }
   lock.unlock();
   std::sort(retval.begin(), retval.end(), [](const auto& lhs, const auto& rhs) {
+    // sort by frequency, if equal by variant index (without any reason)
+    if (lhs.first == rhs.first) {
+      return lhs.second.index() < rhs.second.index();
+    }
     return lhs.first > rhs.first;
   });
   return retval;

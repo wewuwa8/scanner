@@ -6,13 +6,18 @@ static thread_local scnr::ThreadPool* gPool = nullptr;
 
 namespace scnr {
 
-ThreadPool::ThreadPool(size_t workers) {
+ThreadPool::ThreadPool(size_t workers, const scnr::Context* ctx) : ctx_(ctx) {
   for (size_t i = 0; i < workers; ++i) {
     workers_.emplace_back([&]() {
       auto was_pool = gPool;
       gPool = this;
 
       while (true) {
+        if (ctx_ && ctx_->StopRequested()) {
+          CancelTasks();
+          break;
+        }
+
         auto task = task_queue_.Take();
         if (not task) {
           break;
@@ -54,8 +59,7 @@ void ThreadPool::WaitIdle() {
 
 void ThreadPool::Stop() {
   // assert(not stopped_);
-
-  task_queue_.Cancel();
+  CancelTasks();
   for (auto& worker : workers_) {
     worker.join();
   }
@@ -63,8 +67,13 @@ void ThreadPool::Stop() {
   stopped_ = true;
 }
 
-void ThreadPool::TaskDone() {
-  if (tasks_.fetch_add(-1) == 1) {
+void ThreadPool::CancelTasks() {
+  auto remain_tasks = task_queue_.Cancel();
+  TaskDone(remain_tasks);
+}
+
+void ThreadPool::TaskDone(int tasks) {
+  if (tasks_.fetch_sub(tasks) == tasks) {
     tasks_.notify_all();
   }
 }
