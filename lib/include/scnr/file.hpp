@@ -6,6 +6,8 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <sstream>
+#include <stdexcept>
 
 namespace scnr {
 class StreamData {
@@ -56,6 +58,18 @@ class File {
  public:
   File(std::filesystem::path path)
     : path_(std::move(path)), fstream_(std::make_unique<std::fstream>(path_, std::ios::in | std::ios::binary)) {
+    if (!std::filesystem::is_regular_file(path_)) {
+      std::stringstream ss;
+      // u8
+      ss << "Could not open file '" << path_.string() << "': is not a regular file";
+      throw std::runtime_error(ss.str());
+    }
+    if (!fstream_->is_open()) {
+      std::stringstream ss;
+      // u8
+      ss << "Failed to open fstream for file: '" << path_.string() << "'";
+      throw std::runtime_error(ss.str());
+    }
   }
 
   operator StreamData() const {

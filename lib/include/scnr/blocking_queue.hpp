@@ -38,18 +38,20 @@ class UnboundedBlockingQueue {
     CloseImpl(/*clear=*/false);
   }
 
-  void Cancel() {
-    CloseImpl(/*clear=*/true);
+  size_t Cancel() {
+    return CloseImpl(/*clear=*/true);
   }
 
  private:
-  void CloseImpl(bool clear) {
+  size_t CloseImpl(bool clear) {
     std::lock_guard lock(mutex_);
+    size_t remain_sz = buffer_.size();
     closed_ = true;
     if (clear) {
       buffer_.clear();
     }
     cv_data_avail_.notify_all();
+    return remain_sz;
   }
 
  private:

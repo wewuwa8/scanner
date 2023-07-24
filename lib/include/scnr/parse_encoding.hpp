@@ -10,8 +10,8 @@
 namespace scnr {
 
 struct TxtFile {
-  bool withbom = false;
   std::string_view encoding;
+  bool withbom = false;
 
   bool operator==(const TxtFile& rhs) const noexcept {
     return withbom == rhs.withbom && encoding == rhs.encoding;
