@@ -3,8 +3,11 @@
 #include <scnr/thread_pool.hpp>
 
 #include <csignal>
+#include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -19,21 +22,68 @@ void handle_stop(int sig) {
   }
 }
 
-int main(int argc, char** argv) {
-  if (argc != 2 || std::strcmp(argv[1], "-h") == 0 || std::strcmp(argv[1], "--help") == 0) {
-    std::cout << "Usage: -h, --help\t\t\tprint this\n" << argv[0] << " [file or directory]\n";
-    return 1;
+struct CmdOptions {
+  std::optional<int> jobs;
+  std::vector<std::string> files;
+
+  static constexpr std::string_view help_message = R"(Usage: scanner [OPTION...] FILE...
+Determine type of FILEs and collect statistics
+  -h, --help                  display this help and exit
+  -j N, --jobs N              specifies the number of jobs (commands) to run simultaneously
+)";
+
+  void print_help() {
+    std::cout << help_message;
+    std::exit(1);
   }
 
+  void parse(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+      auto arg = argv[i];
+      if (std::strcmp(arg, "-h") == 0 || std::strcmp(arg, "--help") == 0) {
+        print_help();
+      }
+      if (std::strcmp(arg, "-j") == 0 || std::strcmp(arg, "--jobs") == 0) {
+        if (jobs.has_value() || !files.empty() || (i + 1 >= argc)) {
+          print_help();
+        }
+        i += 1;
+        try {
+          jobs = std::atoi(argv[i]);
+        } catch (...) {
+          print_help();
+        }
+        if (jobs.value() <= 0) {
+          print_help();
+        }
+      }
+      files.push_back(arg);
+    }
+
+    if (files.empty()) {
+      print_help();
+    }
+  }
+};
+
+int main(int argc, char** argv) {
   std::signal(SIGTERM, handle_stop);
   std::signal(SIGINT, handle_stop);
 
-  std::filesystem::path path(argv[1]);
-  scnr::ThreadPool pool(std::thread::hardware_concurrency(), &scnr::gContext);
+  CmdOptions options;
+  options.parse(argc, argv);
+  const int hw_concurrency = std::thread::hardware_concurrency();
+  int jobs = options.jobs.value_or(hw_concurrency);
+  jobs = std::min(hw_concurrency, jobs);
+
+  scnr::ThreadPool pool(jobs, &scnr::gContext);
   scnr::FileInfoCollector collector;
-  pool.Submit([path, &collector]() {
-    scnr::process(path, collector);
-  });
+
+  for (const auto& f : options.files) {
+    pool.Submit([f, &collector]() {
+      scnr::process(std::filesystem::path(f), collector);
+    });
+  }
 
   pool.WaitIdle();
   pool.Stop();

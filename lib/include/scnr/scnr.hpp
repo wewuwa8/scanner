@@ -3,6 +3,8 @@
 #include <scnr/parse_elf.hpp>
 #include <scnr/parse_encoding.hpp>
 #include <scnr/parse_mach-o.hpp>
+#include <scnr/parse_pe.hpp>
+#include <scnr/parse_xml.hpp>
 #include <scnr/types.hpp>
 
 #include <mutex>
@@ -12,7 +14,7 @@
 
 namespace scnr {
 
-using FileInfo = std::variant<std::monostate, ElfFile, MachOFile, TxtFile>;
+using FileInfo = std::variant<std::monostate, ElfFile, MachOFile, PEFile, TxtFile, XmlFile>;
 
 class FileInfoCollector {
  public:

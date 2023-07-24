@@ -3,59 +3,85 @@
 
 namespace {
 
-constexpr unsigned char kBell = 7;
-constexpr unsigned char kBS = 8;
-constexpr unsigned char kHT = 9;
-constexpr unsigned char kLF = 10;
-constexpr unsigned char kVT = 11;
-constexpr unsigned char kFF = 12;
-constexpr unsigned char kCR = 13;
-constexpr unsigned char kEsc = 27;
+// Printable chars, Bell, Backspace, HT, LineFeed, VT, FormFeed, CR, NEL
+bool looks_ascii(scnr::Byte c) {
+  return (32 <= c && c < 127) || (7 <= c && c < 14) || c == 133;
+}
 
-/*
- * printable ascii or bell,
- * backspace, tab, line feed, form feed, carriage return, esc, nextline.
- */
-bool looks_ascii(scnr::StreamData stream) {
+bool looks_iso8859_1(scnr::Byte c) {
+  return looks_ascii(c) || (160 <= c);
+}
+
+bool looks_extended_ascii(scnr::Byte c) {
+  return looks_ascii(c) || 128 <= c;
+}
+
+template <typename Func>
+bool looks(scnr::StreamData stream, Func&& func) {
   scnr::Byte buf[1024];
   while (auto nbytes = stream.readnext(buf, sizeof(buf))) {
     for (size_t i = 0; i < nbytes; ++i) {
-      const auto c = buf[i];
-      bool ok =
-        (32 <= c && c < 127) || (c == kBS) || (c == kHT) || (c == kLF) || (c == kVT) || (c == kFF) || (c == kCR);
-      if (ok) {
-        continue;
+      if (!func(buf[i])) {
+        return false;
       }
-      return false;
     }
   }
   return true;
 }
 
+bool looks_ascii(scnr::StreamData stream) {
+  return looks(stream, static_cast<bool (&)(scnr::Byte)>(looks_ascii));
+}
+
+bool looks_iso8859_1(scnr::StreamData stream) {
+  return looks(stream, static_cast<bool (&)(scnr::Byte)>(looks_iso8859_1));
+}
+
+bool looks_extended_ascii(scnr::StreamData stream) {
+  return looks(stream, static_cast<bool (&)(scnr::Byte)>(looks_extended_ascii));
+}
+
+bool valid_ucodepoint(int64_t code) {
+  // check https://stackoverflow.com/questions/27415935/does-unicode-have-a-defined-maximum-number-of-code-points
+
+  // Unicode v15 contains 149186 characters and this number is growing.
+  // Let's check this code in some reasonable limit.
+  return code < 150000;
+}
+
 bool looks_utf8(scnr::StreamData stream) {
   scnr::Byte buf[1024];
-  while (auto nbytes = stream.readnext(buf, sizeof(buf))) {
+  // chunksize must be smaller than buffer size so that extra bytes can be read if needed
+  constexpr size_t chunksize = 1000;
+  while (auto nbytes = stream.readnext(buf, chunksize)) {
     for (size_t i = 0; i < nbytes; ++i) {
-      int ones = std::countl_one(buf[i]);
-      if (ones == 0) {
+      int blocks = std::countl_one(buf[i]);
+      if (blocks == 0) {
         // 0xxxxxxx is plain ASCII
+        // looks_ascii(buf[i])?
         continue;
       }
-      if (ones == 1 || ones > 4) {
+      if (blocks == 1 || blocks > 4) {
         // invalid UTF-8
         return false;
       }
-      ones -= 1;
-      if (i + ones >= nbytes) {
-        // unexpected eof
-        return false;
+      blocks -= 1;
+
+      // read some extra
+      if (i + blocks >= nbytes) {
+        // is ok?
+        if (!stream.readnext(buf + chunksize, i + blocks - nbytes + 1)) {
+          // unexpected eof
+          return false;
+        }
       }
-      while (ones) {
+      // int64_t code = 0;
+      while (blocks) {
         i += 1;
         if (std::countl_one(buf[i]) != 1) {
           return false;
         }
-        ones -= 1;
+        blocks -= 1;
       }
     }
   }
@@ -83,9 +109,7 @@ bool looks_utf32(scnr::StreamData stream, bool bigendian) {
       } else {
         code = buf[i + 0] << 0x0 | buf[i + 1] << 0x8 | buf[i + 2] << 0x10 | buf[i + 3] << 0x18;
       }
-      // Unicode v15 contains 149186 characters and this number is growing.
-      // Let's check this code in some reasonable limit.
-      if (code > 150000) {
+      if (!valid_ucodepoint(code)) {
         return false;
       }
     }
@@ -109,9 +133,10 @@ bool looks_utf32_with_BOM(scnr::StreamData stream, bool bigendian) {
   return false;
 }
 
-bool looks_xml(scnr::StreamData stream) {
-  return false;
-}
+#define F 0 /* character never appears in text */
+#define T 1 /* character appears in plain ASCII text */
+#define I 2 /* character appears in ISO-8859 text */
+#define X 3 /* character appears in non-ISO extended ASCII (Mac, IBM PC) */
 
 }  // namespace
 
@@ -136,8 +161,10 @@ std::optional<TxtFile> try_txt(scnr::StreamData stream) {
     txtfile.encoding = "UTF-32-BE";
   } else if (looks_utf32(stream, false)) {
     txtfile.encoding = "UTF-32-LE";
-  } else if (looks_xml(stream)) {
-    return {};
+  } else if (looks_iso8859_1(stream)) {
+    txtfile.encoding = "iso-8859-1";
+  } else if (looks_extended_ascii(stream)) {
+    txtfile.encoding = "extended ascii";
   } else {
     return {};
   }

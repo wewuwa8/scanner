@@ -145,7 +145,7 @@ std::optional<scnr::MachOFat> parse_fat(scnr::StreamData stream) {
   if (nfat_arch == 0) {
     return {};
   }
-  for (int i = 0; i < nfat_arch; ++i) {
+  for (uint32_t i = 0; i < nfat_arch; ++i) {
     fat_arch arch;
     if (!stream.readAs(read_bytes, arch)) {
       return {};

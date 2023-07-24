@@ -1,6 +1,7 @@
 #include <scnr/parse_elf.hpp>
 #include <scnr/parse_encoding.hpp>
 #include <scnr/parse_mach-o.hpp>
+#include <scnr/parse_xml.hpp>
 #include <scnr/scnr.hpp>
 #include <scnr/thread_pool.hpp>
 #include <scnr/util.hpp>
@@ -28,6 +29,13 @@ void process_file_impl(const std::filesystem::path& path, scnr::FileInfoCollecto
 
 void process_impl(const std::filesystem::path& path, scnr::FileInfoCollector& collector) {
   auto thread_pool = scnr::ThreadPool::Current();
+
+  if (!std::filesystem::exists(path)) {
+    std::stringstream ss;
+    ss << "'" << path.string() << "' does not exist!\n";
+    std::cout << ss.str();
+    return;
+  }
 
   if (std::filesystem::is_directory(path)) {
     std::filesystem::directory_iterator dir_iter(path);
@@ -62,6 +70,10 @@ FileInfo detect_content(scnr::StreamData stream) {
     fileinfo = std::move(elf.value());
   } else if (auto macho = try_macho(stream)) {
     fileinfo = std::move(macho.value());
+  } else if (auto pe = try_pe(stream)) {
+    fileinfo = std::move(pe.value());
+  } else if (auto xml = try_xml(stream)) {
+    fileinfo = std::move(xml.value());
   } else if (auto txt = try_txt(stream)) {
     fileinfo = std::move(txt.value());
   }
